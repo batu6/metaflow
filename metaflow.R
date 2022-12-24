@@ -6,10 +6,12 @@ library(DT)
 fd <- list()
 md <- list()
 
-# Option to filter out side files or select groups in the beginning
-# Uppercase insensitive filtering.
+# --- Option to filter out side files or select groups in the beginning
+# --- option to select the column of str_detect, not so necessary I think.
+# --- reset button ?
+# --- download button 
 
-
+# Presets
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
 Cell_Type <- c("CD4\nCD8", "CD4\nCD8")
 ug_ml <- c("unstim\n01\n10", "0 ug/ml\n0.1 ug/ml\n10 ug/ml")
@@ -26,24 +28,23 @@ ui <- fluidPage(
   ),
   
   mainPanel(
+    # Displays the uploaded file names
     verbatimTextOutput("exps"),
+    # Annotate the experiment with initials and numbers of the individual experiments
     div(id = "expID"),
+    
     fluidRow(
+      # Group name, string input and their names UI
       column(4,
              div(id = "group"),
              div(id = "vars")
       ),
       
       column(8,
+             # metadata table
              dataTableOutput("metatable")
       )
     )
-    
-    
-    
-    
-    
-    
     
   )
   
@@ -53,23 +54,17 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
-  
-  ## read wsp file(s)
-  
-  wss <- reactiveVal(1)
-  dataf <- reactiveVal()
-  
   flowdata <- eventReactive(input$files,{
     
     #print(input$files)
     #print(input$files[1,4])
     
+    ## read wsp file(s) and save it in flowdata()
     
     for(i in 1:nrow(input$files)){
       
       fd[[i]] <- wsx_get_popstats(ws = input$files[i,4])
       
-      #length_input(length_input() + 1)
     }
     
     return(fd)
@@ -77,7 +72,7 @@ server <- function(input, output, session) {
   
   
   ## Display wsp files and take input for experiment ID
-  
+  wss <- reactiveVal(1)
   
   observeEvent(flowdata(), {
     
@@ -88,9 +83,7 @@ server <- function(input, output, session) {
     
     wss(wss()[-length(wss())])
     
-    
-    #print(unique(dataf()[[length_input()]][[1]]$ws))
-    #
+
     insertUI(
       selector = '#expID',
       where = "beforeEnd",
@@ -101,12 +94,10 @@ server <- function(input, output, session) {
                   label = tags$em("Experiment IDs")),
         actionButton("submitID", "Submit",class="btn btn-info"))
     )
-    
-    
-    
+  
   })
   
-  
+  ## Display the wsp files if any file uploaded
   output$exps <- renderText({
     
     if(wss()[1]!= 1){
@@ -114,8 +105,11 @@ server <- function(input, output, session) {
       wss()  
     }
     
-    
   })
+  
+  
+  ## Remove the experiment ID input UIs
+  ## Design a metadata table including specific IDs for the experiment.
   
   metadata <- reactiveVal()
   
@@ -128,41 +122,40 @@ server <- function(input, output, session) {
     
     for(i in 1:length(flowdata())){
       md[[i]] <- flowdata()[[i]][[1]] %>%
-        select("FileName") %>%
+        select("FileName") %>% 
         distinct(FileName, .keep_all = T) %>%
-        mutate(FileName = str_replace_all(FileName, "%20", " "),
-               Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]),
+        mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
+               Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
                FileName2 = paste(FileName, Experiment, sep = "_")) %>%
-        filter(!str_detect(FileName, "Compensation"))
+        filter(!str_detect(FileName, "Compensation")) # remove compensation files
       
     }
     
-    md <- do.call(bind_rows, md)
+    md <- do.call(bind_rows, md) # combine all wsps.
     
-    metadata(md)
+    metadata(md) # save it to metadata()
     
-    print(metadata)
+    #print(metadata)
   })
   
-  
-  
-  ## combine with each single wsp file. 1st col: file names 2nd col: exp ID, 3rd col paste
-  
-  ## row bind
-  
-  ## display the first column with file names.
-  
+  ## display the metadata 'seed'
+  ### ------------------ Maybe keep FileName2 here instead of FileName?
   output$metatable <- renderDataTable({
     
     if(!is.null(metadata())){
       metadata() %>%
-        select(-"FileName2")
+        select(-"FileName2") 
     }
     
     
-  },options = list(pageLength = 100))
+  },options = list(pageLength = 100)) # show as much as possible
   
-  ## take identifier, add input text box (comma separated multiple inputs etc) = unique identifiers for population groups
+  ## Take input for group names(cols) and string identifiers to mine meta data from sample names (FileName).
+  # updateMeta: applies the given inputs to update the metadata()
+  # preset: allows you to select presets for data grouping.
+  # varName: name of the group (column name for the variable)
+  # var: string input for mining the text
+  # var2: name for the mined text under the varName column
   
   observeEvent(metadata(), {
     
@@ -193,14 +186,13 @@ server <- function(input, output, session) {
     
     
     
-  },ignoreInit = T, once = T)
+  },ignoreInit = T, once = T) # I don't want to generate it again when the metadata() updates.
   
-  #  output$strText <- renderText({
-  #    
-  #    str_replace_all(input$var, " ", "\n")
-  #  })
-  
-  
+  # If no preset selected update the var2 according to the inputs from var (string).
+  # One can manually change the experimental group names (var2) also.
+  # If preset selected, shows you how it looks like at textAreas and it applies it when you click update.
+    # not changeable as long as the preset is selected.
+    # ------------ Maybe if I use isolate somewhere it wont update it?
   
   observeEvent(c(input$preset, input$var),{
     
@@ -217,25 +209,23 @@ server <- function(input, output, session) {
       
     }
     
-    
-    
-    
   })
+
+  # Upon clicking update Table it mines the FileName according to the given input and creates a new column.
   
-  
-  counter <- reactiveVal(0)
-  
-  
-  
-  ## Apply button.
-  
-  ## Display updated table.
   
   observeEvent(input$updateMeta,{
+    
+    # If the given input is shorter than 12 (e.g. 3 values entered.)
+    # 1 2 3 + and nine 3s more to complete it to 12.
+    # So str_detect will choose the last entered value and apply it again, which will  not affect the generated column.
+    # I did this to allow input of various lengths.
+    # Since I added 12 str_detects in case_when(), it can max take 12 different groups. It should be enough for most cases but can be updated.
     
     index <- 1:length(str_split(input$var, pattern = "\\n")[[1]])
     ix <- c(index, rep(index[length(index)], 12 - length(index)) )
     
+    # case insensitive.
     x <- metadata() %>%
       mutate(!!input$varName := case_when(
         str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[1]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[1]],
@@ -253,13 +243,9 @@ server <- function(input, output, session) {
       )
       )
     
+    metadata(x) # save updated metadata
     
-    
-    metadata(x)
-    # remove text boxes and bring back. Instead create two text boxes. Left string_ right label (automaticall copied)
-    #click enter and it resets the text boxes and print a text to show you. CD3 > CD3 ie. 
-    # so I dont create new text boxes. They will stay there. DO it in a new copy
-    
+    # reset the inputs to null
     updateTextAreaInput(session, "var",
                         value = "")
     updateTextInput(session, "varName",
@@ -268,15 +254,6 @@ server <- function(input, output, session) {
                          selected = "")
     
   })
-  
-  # select option for pre determined groupings, it updates the text boxes
-  # option to select the column of str_detect
-  
-  ## repeat.
-  
-  ## reset button.
-  
-  ## download.
   
 }
 
