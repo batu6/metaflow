@@ -6,36 +6,45 @@ library(DT)
 fd <- list()
 md <- list()
 
+# Option to filter out side files or select groups in the beginning
+# Uppercase insensitive filtering.
+
 
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
 Cell_Type <- c("CD4\nCD8", "CD4\nCD8")
-ug_ml <- c("01\n10", "0 ug/ml\n0.1 ug/ml\n10 ug/ml")
-presetList <- list(stimulation, Cell_Type, ug_ml)
-names(presetList) <- c("stimulation", "Cell_Type", "ug_ml")
+ug_ml <- c("unstim\n01\n10", "0 ug/ml\n0.1 ug/ml\n10 ug/ml")
+dilution <- c("unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10", "unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10")
+presetList <- list(stimulation, Cell_Type, ug_ml, dilution)
+names(presetList) <- c("stimulation", "Cell_Type", "ug_ml", "dilution")
 
 
 ui <- fluidPage(
   
   ## Upload WSPs
-  sidebarPanel(width = 1.5,
+  sidebarPanel(width = 2,
                fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T)
   ),
   
   mainPanel(
-    textOutput("exps"),
-    verbatimTextOutput("strText"),
+    verbatimTextOutput("exps"),
     div(id = "expID"),
-    div(id = "group"),
-    div(id = "groupString"),
-    dataTableOutput("metatable"),
-    div(id = "addString"),
-    tags$script(HTML("$(function(){ 
-      $(document).keyup(function(e) {
-      if (e.which == 13) {
-        $('#addClick').click()
-      }
-      });
-      })"))
+    fluidRow(
+      column(4,
+             div(id = "group"),
+             div(id = "vars")
+      ),
+      
+      column(8,
+             dataTableOutput("metatable")
+      )
+    )
+    
+    
+    
+    
+    
+    
+    
   )
   
   
@@ -123,7 +132,8 @@ server <- function(input, output, session) {
         distinct(FileName, .keep_all = T) %>%
         mutate(FileName = str_replace_all(FileName, "%20", " "),
                Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]),
-               FileName2 = paste(FileName, Experiment, sep = "_")) 
+               FileName2 = paste(FileName, Experiment, sep = "_")) %>%
+        filter(!str_detect(FileName, "Compensation"))
       
     }
     
@@ -164,12 +174,24 @@ server <- function(input, output, session) {
                      label = tags$em("Update Table")),
         selectInput('preset', 'Presets', c(Choose='', names(presetList)), selectize=TRUE),
         textInput(inputId = "varName", 
-                  label = tags$em("Variable Name")),
-        textAreaInput(inputId = "var",resize = "none", 
-                      label = tags$em("String")),
-        textAreaInput(inputId = "var2",resize = "none", 
-                      label = tags$em("Label")))
+                  label = tags$em("Variable Name")))
     )
+    
+    insertUI(
+      selector = '#vars',
+      where = "beforeEnd",
+      ui = tagList(
+        column(11,
+               column(5,textAreaInput(inputId = "var",resize = "none", width = '450px', height = '220px', 
+                                      label = tags$em("String"))),
+               column(1, h3(">", align = "center")),
+               column(5,textAreaInput(inputId = "var2",resize = "none", width = '450px', height = '220px', 
+                                      label = tags$em("Label")) ))
+      )
+      
+    )
+    
+    
     
   },ignoreInit = T, once = T)
   
@@ -212,16 +234,22 @@ server <- function(input, output, session) {
   observeEvent(input$updateMeta,{
     
     index <- 1:length(str_split(input$var, pattern = "\\n")[[1]])
-    ix <- c(index, rep(index[length(index)], 6 - length(index)) )
+    ix <- c(index, rep(index[length(index)], 12 - length(index)) )
     
     x <- metadata() %>%
       mutate(!!input$varName := case_when(
-        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[1]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[1]],
-        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[2]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[2]],
-        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[3]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[3]],
-        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[4]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[4]],
-        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[5]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[5]],
-        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[6]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[6]]
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[1]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[1]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[2]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[2]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[3]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[3]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[4]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[4]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[5]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[5]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[6]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[6]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[7]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[7]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[8]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[8]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[9]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[9]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[10]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[10]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[11]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[11]],
+        str_detect(FileName, regex(str_split(input$var, pattern = "\\n")[[1]][ix[12]], ignore_case = T)) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[12]]
       )
       )
     
