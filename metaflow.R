@@ -6,15 +6,24 @@ library(DT)
 fd <- list()
 md <- list()
 
+
+stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
+Cell_Type <- c("CD4\nCD8", "CD4\nCD8")
+ug_ml <- c("01\n10", "0 ug/ml\n0.1 ug/ml\n10 ug/ml")
+presetList <- list(stimulation, Cell_Type, ug_ml)
+names(presetList) <- c("stimulation", "Cell_Type", "ug_ml")
+
+
 ui <- fluidPage(
   
   ## Upload WSPs
-  sidebarPanel(
-    fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T)
+  sidebarPanel(width = 1.5,
+               fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T)
   ),
   
   mainPanel(
     textOutput("exps"),
+    verbatimTextOutput("strText"),
     div(id = "expID"),
     div(id = "group"),
     div(id = "groupString"),
@@ -30,11 +39,11 @@ ui <- fluidPage(
   )
   
   
-  )
+)
 
 
 server <- function(input, output, session) {
-
+  
   
   ## read wsp file(s)
   
@@ -57,33 +66,33 @@ server <- function(input, output, session) {
     return(fd)
   })
   
-
-  ## Display wsp files and take input for experiment ID
-
-
-  observeEvent(flowdata(), {
-
   
-      for(i in 1:length(flowdata())){
-        wss(c(unique(flowdata()[[i]][[1]]$ws), wss()) )
-      }
+  ## Display wsp files and take input for experiment ID
+  
+  
+  observeEvent(flowdata(), {
+    
+    
+    for(i in 1:length(flowdata())){
+      wss(c(unique(flowdata()[[i]][[1]]$ws), wss()) )
+    }
     
     wss(wss()[-length(wss())])
     
     
     #print(unique(dataf()[[length_input()]][[1]]$ws))
     #
-      insertUI(
-        selector = '#expID',
-        where = "beforeEnd",
-        ui = tagList(
-          textInput(inputId = "ini", 
-                    label = tags$em("Initials")),
-          textInput(inputId = "idi", 
-                               label = tags$em("Experiment IDs")),
-                     actionButton("submitID", "Submit",class="btn btn-info"))
-      )
-      
+    insertUI(
+      selector = '#expID',
+      where = "beforeEnd",
+      ui = tagList(
+        textInput(inputId = "ini", 
+                  label = tags$em("Initials")),
+        textInput(inputId = "idi", 
+                  label = tags$em("Experiment IDs")),
+        actionButton("submitID", "Submit",class="btn btn-info"))
+    )
+    
     
     
   })
@@ -101,31 +110,31 @@ server <- function(input, output, session) {
   
   metadata <- reactiveVal()
   
- observeEvent(input$submitID, { 
-      
-      removeUI(selector = "div:has(> #submitID)", immediate = T)
-      removeUI(selector = "div:has(> #ini)", immediate = T)
-      removeUI(selector = "div:has(> #idi)", immediate = T)
+  observeEvent(input$submitID, { 
     
+    removeUI(selector = "div:has(> #submitID)", immediate = T)
+    removeUI(selector = "div:has(> #ini)", immediate = T)
+    removeUI(selector = "div:has(> #idi)", immediate = T)
+    
+    
+    for(i in 1:length(flowdata())){
+      md[[i]] <- flowdata()[[i]][[1]] %>%
+        select("FileName") %>%
+        distinct(FileName, .keep_all = T) %>%
+        mutate(FileName = str_replace_all(FileName, "%20", " "),
+               Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]),
+               FileName2 = paste(FileName, Experiment, sep = "_")) 
       
-      for(i in 1:length(flowdata())){
-        md[[i]] <- flowdata()[[i]][[1]] %>%
-          select("FileName") %>%
-          distinct(FileName, .keep_all = T) %>%
-          mutate(FileName = str_replace_all(FileName, "%20", " "),
-                 Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]),
-                 FileName2 = paste(FileName, Experiment, sep = "_")) 
-        
-      }
-      
-      md <- do.call(bind_rows, md)
-      
-      metadata(md)
-      
-      print(metadata)
+    }
+    
+    md <- do.call(bind_rows, md)
+    
+    metadata(md)
+    
+    print(metadata)
   })
- 
- 
+  
+  
   
   ## combine with each single wsp file. 1st col: file names 2nd col: exp ID, 3rd col paste
   
@@ -139,10 +148,10 @@ server <- function(input, output, session) {
       metadata() %>%
         select(-"FileName2")
     }
-      
+    
     
   },options = list(pageLength = 100))
- 
+  
   ## take identifier, add input text box (comma separated multiple inputs etc) = unique identifiers for population groups
   
   observeEvent(metadata(), {
@@ -153,67 +162,87 @@ server <- function(input, output, session) {
       ui = tagList(
         actionButton("updateMeta",class="btn btn-info", 
                      label = tags$em("Update Table")),
-        textInput(inputId = "var", 
-                  label = tags$em("Group")))
+        selectInput('preset', 'Presets', c(Choose='', names(presetList)), selectize=TRUE),
+        textInput(inputId = "varName", 
+                  label = tags$em("Variable Name")),
+        textAreaInput(inputId = "var",resize = "none", 
+                      label = tags$em("String")),
+        textAreaInput(inputId = "var2",resize = "none", 
+                      label = tags$em("Label")))
     )
     
-  },ignoreInit = T)
+  },ignoreInit = T, once = T)
   
-  observeEvent(metadata(), {
-    
-    insertUI(
-      selector = '#addString',
-      where = "beforeEnd",
-      ui = tagList(
-        actionButton("addClick",class="btn btn-info", label = "", style='font-size:0.2%'))
-    )
+  #  output$strText <- renderText({
+  #    
+  #    str_replace_all(input$var, " ", "\n")
+  #  })
   
+  
+  
+  observeEvent(c(input$preset, input$var),{
     
-  },ignoreInit = T)
+    if(input$preset == ""){
+      updateTextAreaInput(session, "var2",
+                          value = input$var)
+    } else if(input$preset != ""){
+      updateTextAreaInput(session, "var",
+                          value = presetList[[input$preset]][1])
+      updateTextAreaInput(session, "var2",
+                          value = presetList[[input$preset]][2])
+      updateTextInput(session, "varName",
+                      value = input$preset)
+      
+    }
+    
+    
+    
+    
+  })
   
   
   counter <- reactiveVal(0)
   
-  observeEvent(input$addClick, {
-    
-    counter(1 + counter())
-    
-  },ignoreInit = T)
   
-  observeEvent(input$addClick, {
-    
-    insertUI(
-      selector = '#groupString',
-      where = "beforeEnd",
-      ui = tagList(
-        textInput(inputId = paste0("str",counter()), 
-                  label = tags$em("String")))
-    )
-    
-},ignoreInit = T)
-
+  
   ## Apply button.
   
   ## Display updated table.
   
   observeEvent(input$updateMeta,{
     
-    a <- input$var
+    index <- 1:length(str_split(input$var, pattern = "\\n")[[1]])
+    ix <- c(index, rep(index[length(index)], 6 - length(index)) )
     
     x <- metadata() %>%
-      mutate(a = case_when(
-        str_detect(FileName, input$str1) ~ input$str1,
-        str_detect(FileName, input$str2) ~ input$str2 
+      mutate(!!input$varName := case_when(
+        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[1]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[1]],
+        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[2]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[2]],
+        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[3]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[3]],
+        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[4]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[4]],
+        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[5]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[5]],
+        str_detect(FileName, str_split(input$var, pattern = "\\n")[[1]][ix[6]]) ~ str_split(input$var2, pattern = "\\n")[[1]][ix[6]]
       )
       )
     
+    
+    
     metadata(x)
-  # remove text boxes and bring back. Instead create two text boxes. Left string_ right label (automaticall copied)
+    # remove text boxes and bring back. Instead create two text boxes. Left string_ right label (automaticall copied)
     #click enter and it resets the text boxes and print a text to show you. CD3 > CD3 ie. 
     # so I dont create new text boxes. They will stay there. DO it in a new copy
     
+    updateTextAreaInput(session, "var",
+                        value = "")
+    updateTextInput(session, "varName",
+                    value = "")
+    updateSelectizeInput(session, "preset",
+                         selected = "")
     
   })
+  
+  # select option for pre determined groupings, it updates the text boxes
+  # option to select the column of str_detect
   
   ## repeat.
   
@@ -221,7 +250,7 @@ server <- function(input, output, session) {
   
   ## download.
   
-  }
+}
 
 
 shinyApp(ui, server)
