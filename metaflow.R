@@ -2,20 +2,24 @@ library(shiny)
 library(fcexpr)
 library(tidyverse)
 library(DT)
+library(writexl)
 
 fd <- list()
 md <- list()
+pd <- list()
+sd <- list()
 
 # --- Option to filter out side files or select groups in the beginning
 # --- option to select the column of str_detect, not so necessary I think.
 # --- reset button ?
 # --- download button 
+# --- shinyjs disable
 
 # Presets
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
 Cell_Type <- c("CD4\nCD8", "CD4\nCD8")
 ug_ml <- c("unstim\n01\n10", "0 ug/ml\n0.1 ug/ml\n10 ug/ml")
-dilution <- c("unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10", "unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10")
+dilution <- c("unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10\nno inhibitor", "unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10\nNo Inhibitor")
 presetList <- list(stimulation, Cell_Type, ug_ml, dilution)
 names(presetList) <- c("stimulation", "Cell_Type", "ug_ml", "dilution")
 
@@ -24,26 +28,85 @@ ui <- fluidPage(
   
   ## Upload WSPs
   sidebarPanel(width = 2,
-               fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T)
+               fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T),
+               
+               hr(),
+               
+               checkboxGroupInput("filtergroup", label = "Filter groups", choices = character(0)),
+               actionButton("filtergroupb",label = "Keep"),
+               checkboxGroupInput("percentage", label = "Percentage gates", choices = character(0)),
+               actionButton("get_perc",label = "Get data percentage!")
   ),
   
   mainPanel(
-    # Displays the uploaded file names
-    verbatimTextOutput("exps"),
-    # Annotate the experiment with initials and numbers of the individual experiments
-    div(id = "expID"),
     
-    fluidRow(
-      # Group name, string input and their names UI
-      column(4,
-             div(id = "group"),
-             div(id = "vars")
+    tabsetPanel(type = "tabs",
+                tabPanel("First panelll", 
+
+      # Displays the uploaded file names
+      verbatimTextOutput("exps"),
+      fluidRow(
+        
+        column(5,
+               # Annotate the experiment with initials and numbers of the individual experiments
+               div(id = "expID"),
+        ),
+        
+        column(2,offset = 4,
+               downloadButton("dm", "Download Meta",class="btn btn-info btn-sm"),
+               hr()     
+        )
       ),
-      
-      column(8,
-             # metadata table
-             dataTableOutput("metatable")
+
+                     
+      fluidRow(
+        # Group name, string input and their names UI
+        column(4,
+               div(id = "group"),
+               div(id = "vars"),
+               div(id = "combmeta")
+        ),
+        
+        column(8,
+
+               # metadata table
+               dataTableOutput("metatable")
+        )
+        
       )
+      
+    ),
+    tabPanel("Percentage Pannel", 
+             
+             fluidRow(
+               column(10,
+                      checkboxGroupInput("arrcol", label = "Arrange", choices = character(0),inline = T)
+                      ),
+               column(2,
+                      downloadButton("dp","Download",class="btn btn-info btn-sm")
+                      )
+             ),
+             
+             
+             dataTableOutput("perctab")
+    
+             ),
+    tabPanel("Stats Pannel", 
+             
+             fluidRow(
+               column(10,
+                      checkboxGroupInput("arrcol2", label = "Arrange", choices = character(0),inline = T)
+               ),
+               column(2,
+                      downloadButton("ds","Download",class="btn btn-info btn-sm")
+               )
+             ),
+             
+
+             dataTableOutput("stattab")
+             
+    )
+             
     )
     
   )
@@ -112,6 +175,9 @@ server <- function(input, output, session) {
   ## Design a metadata table including specific IDs for the experiment.
   
   metadata <- reactiveVal()
+  percentdata <- reactiveVal()
+  filterdata <- reactiveVal()
+  statdata <- reactiveVal()
   
   observeEvent(input$submitID, { 
     
@@ -122,7 +188,7 @@ server <- function(input, output, session) {
     
     for(i in 1:length(flowdata())){
       md[[i]] <- flowdata()[[i]][[1]] %>%
-        select("FileName") %>% 
+        select(c(FileName, group)) %>% 
         distinct(FileName, .keep_all = T) %>%
         mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
                Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
@@ -135,8 +201,99 @@ server <- function(input, output, session) {
     
     metadata(md) # save it to metadata()
     
-    #print(metadata)
+    # Have the filter data separately by considering the first file only. The target gate names should be same also in other files
+    # i.e. it should be CD4 in all but not cd_4 in the other file.
+    
+    filter_data <- flowdata()[[1]][[1]] %>%
+      select(c(FileName, Population, group)) %>%
+      mutate(FileName = str_replace_all(FileName, "%20", " ")) %>% #required for adding to statdata
+      filter(!str_detect(FileName, "Compensation")) 
+    
+    filterdata(filter_data)
+    
+    
+    for(i in 1:length(flowdata())){
+      pd[[i]] <- flowdata()[[i]][[1]] %>%
+        select(FileName, Population, FractionOfParent, group) %>% 
+        mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
+               Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
+               FileName2 = paste(FileName, Experiment, sep = "_")) %>%
+        filter(!str_detect(FileName, "Compensation")) # remove compensation files
+      
+    }
+    
+    pd <- do.call(bind_rows, pd) # combine all wsps.
+    
+    percentdata(pd)
+    
+    # gives an error when there is no stat calculation
+    if(!is.null(flowdata()[[1]][[2]])){
+    
+      
+      for(i in 1:length(flowdata())){
+        sd[[i]] <- flowdata()[[i]][[2]] %>%
+          select(FileName, PopulationFullPath, statistic, channel, value) %>% 
+          mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
+                 Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
+                 FileName2 = paste(FileName, Experiment, sep = "_"),
+                 Population = str_extract(PopulationFullPath, "[^\\/]*$")) %>%
+          filter(!str_detect(FileName, "Compensation")) %>% # remove compensation files
+          select(-PopulationFullPath) %>%
+          left_join(filter_data %>% distinct(FileName, .keep_all = T) %>% select(FileName, group),by= "FileName" )
+      }
+      
+      print(sd)
+      
+      sd <- do.call(bind_rows, sd) # combine all wsps.
+      
+      statdata(sd)
+    
+    } 
+    #print(per_data)
   })
+  
+  observeEvent(filterdata(),{
+    updateCheckboxGroupInput(inputId = "filtergroup",choices = unique(filterdata()$group) )
+    updateCheckboxGroupInput(inputId = "percentage",choices = unique(filterdata()$Population) )
+    
+  })
+  
+  observeEvent(input$filtergroupb,{
+    mfilter <- metadata() %>%
+                filter(group %in% input$filtergroup)
+    metadata(mfilter)
+    
+    pfilter <- percentdata() %>%
+      filter(group %in% input$filtergroup)
+    percentdata(pfilter)
+    
+    if(!is.null(flowdata()[[1]][[2]])){
+      sfilter <- statdata() %>%
+        filter(group %in% input$filtergroup)
+      statdata(sfilter)
+    }
+  
+  })
+  
+  observeEvent(input$get_perc,{
+    xget_perc <- percentdata() %>%
+      filter(Population %in% input$percentage)
+    
+    #xget_perc <- percentdata() %>%
+    #  filter(Population %in% input$percentage) %>%
+    #    pivot_wider(names_from = Population, values_from = FractionOfParent)
+  
+    #xget_perc <- percentdata() %>%
+    #  filter(Population %in% input$percentage) %>%
+    #    select(-FileName2) %>%
+    #      pivot_wider(names_from = Experiment, values_from = FractionOfParent)
+    
+    print(xget_perc)
+    percentdata(xget_perc)
+    
+  })
+  
+  
   
   ## display the metadata 'seed'
   ### ------------------ Maybe keep FileName2 here instead of FileName?
@@ -174,13 +331,17 @@ server <- function(input, output, session) {
       selector = '#vars',
       where = "beforeEnd",
       ui = tagList(
-        column(11,
-               column(5,textAreaInput(inputId = "var",resize = "none", width = '450px', height = '220px', 
+
+        column(12,
+               column(5,textAreaInput(inputId = "var",resize = "none", width = '550px', height = '220px', 
                                       label = tags$em("String"))),
                column(1, h3(">", align = "center")),
-               column(5,textAreaInput(inputId = "var2",resize = "none", width = '450px', height = '220px', 
+               column(5,textAreaInput(inputId = "var2",resize = "none", width = '550px', height = '220px', 
                                       label = tags$em("Label")) ))
+        
+        
       )
+
       
     )
     
@@ -188,24 +349,50 @@ server <- function(input, output, session) {
     
   },ignoreInit = T, once = T) # I don't want to generate it again when the metadata() updates.
   
+  observeEvent(metadata(), {
+    
+    
+    insertUI(
+      selector = '#combmeta',
+      where = "beforeEnd",
+      ui = tagList(
+        column(2,
+               
+               actionButton("combine", "Combine",class="btn btn-success")
+               )
+      )
+      
+      
+    )
+    
+    
+  },ignoreInit = T, once = T)
+  
+  
   # If no preset selected update the var2 according to the inputs from var (string).
   # One can manually change the experimental group names (var2) also.
   # If preset selected, shows you how it looks like at textAreas and it applies it when you click update.
     # not changeable as long as the preset is selected.
     # ------------ Maybe if I use isolate somewhere it wont update it?
   
-  observeEvent(c(input$preset, input$var),{
-    
-    if(input$preset == ""){
+  # I separated the two below so that you can edit the presets now on the go.
+  observeEvent(input$var,{
+  
       updateTextAreaInput(session, "var2",
                           value = input$var)
-    } else if(input$preset != ""){
-      updateTextAreaInput(session, "var",
-                          value = presetList[[input$preset]][1])
-      updateTextAreaInput(session, "var2",
-                          value = presetList[[input$preset]][2])
-      updateTextInput(session, "varName",
-                      value = input$preset)
+    
+  })
+  
+  observeEvent(input$preset,{
+    
+      if(input$preset != ""){
+        
+        updateTextAreaInput(session, "var",
+                            value = presetList[[input$preset]][1])
+        updateTextAreaInput(session, "var2",
+                            value = presetList[[input$preset]][2])
+        updateTextInput(session, "varName",
+                        value = input$preset)
       
     }
     
@@ -254,6 +441,77 @@ server <- function(input, output, session) {
                          selected = "")
     
   })
+  
+  percCombine <- reactiveVal()
+  statCombine <- reactiveVal()
+  
+  observeEvent(input$combine,{
+    
+    pc <- left_join(percentdata(),metadata(), by=c("FileName2", "FileName", "Experiment", "group") )
+    
+    pc <- pc %>%
+      select(-FileName2) %>%
+      pivot_wider(names_from = Experiment, values_from = FractionOfParent)
+    
+    percCombine(pc)
+
+    updateCheckboxGroupInput(inputId = "arrcol", choices = colnames(percCombine()))
+    
+    ### stat part
+    
+    if(!is.null(statdata())){
+      sc <- left_join(statdata(),metadata(), by=c("FileName2", "FileName", "Experiment", "group") )
+      sc <- sc %>%
+        select(-FileName2) %>%
+        pivot_wider(names_from = Experiment, values_from = value)
+      
+      statCombine(sc)
+      
+      updateCheckboxGroupInput(inputId = "arrcol2", choices = colnames(statCombine()))
+    }
+
+
+    
+  })
+  
+  output$perctab <- renderDataTable({
+    
+    if(!is.null(percCombine())){
+      
+        percCombine() %>%
+          arrange(across(all_of(input$arrcol)))
+
+    }
+
+  },options = list(pageLength = 100))
+  
+  output$stattab <- renderDataTable({
+    
+    if(!is.null(statCombine()) ){
+      
+      statCombine() %>%
+        arrange(across(all_of(input$arrcol2)))
+      
+    }
+    
+  },options = list(pageLength = 100))
+
+
+    
+  output$dm <- downloadHandler(
+    filename = function() {"metadata.xlsx"},
+    content = function(file) {write_xlsx(metadata(), path = file)}
+  )
+  
+  output$dp <- downloadHandler(
+    filename = function() {"dataperc.xlsx"},
+    content = function(file) {write_xlsx(percCombine(), path = file)}
+  )
+  
+  output$ds <- downloadHandler(
+    filename = function() {"datastat.xlsx"},
+    content = function(file) {write_xlsx(statCombine(), path = file)}
+  )
   
 }
 
