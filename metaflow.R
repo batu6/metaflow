@@ -8,19 +8,24 @@ fd <- list()
 md <- list()
 pd <- list()
 sd <- list()
+new_presets <- list()
+namesss <- c()
 
+# when you dont have it in the same channel it becomes a problem naturally...
 # --- Option to filter out side files or select groups in the beginning
 # --- option to select the column of str_detect, not so necessary I think.
 # --- reset button ?
 # --- download button 
 # --- shinyjs disable
+# --- var var2 update problem presets overwrite
 
 # Presets
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
 Cell_Type <- c("CD4\nCD8", "CD4\nCD8")
 ug_ml <- c("unstim\n01\n10", "0 ug/ml\n0.1 ug/ml\n10 ug/ml")
 dilution <- c("unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10\nno inhibitor", "unstim\nd1\nd2\nd3\nd4\nd5\nd6\nd7\nd8\nd9\nd10\nNo Inhibitor")
-presetList <- list(stimulation, Cell_Type, ug_ml, dilution)
+
+presetList<- list(stimulation, Cell_Type, ug_ml, dilution)
 names(presetList) <- c("stimulation", "Cell_Type", "ug_ml", "dilution")
 
 
@@ -54,6 +59,7 @@ ui <- fluidPage(
         
         column(2,offset = 4,
                downloadButton("dm", "Download Meta",class="btn btn-info btn-sm"),
+               fileInput("presetUpdate", label = "Upload Preset", accept = ".rds",multiple = F),
                hr()     
         )
       ),
@@ -61,13 +67,13 @@ ui <- fluidPage(
                      
       fluidRow(
         # Group name, string input and their names UI
-        column(4,
+        column(5,
                div(id = "group"),
                div(id = "vars"),
                div(id = "combmeta")
         ),
         
-        column(8,
+        column(7,
 
                # metadata table
                dataTableOutput("metatable")
@@ -165,7 +171,7 @@ server <- function(input, output, session) {
     
     if(wss()[1]!= 1){
       
-      wss()  
+      rev(wss())  
     }
     
   })
@@ -217,7 +223,8 @@ server <- function(input, output, session) {
         select(FileName, Population, FractionOfParent, group) %>% 
         mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
                Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
-               FileName2 = paste(FileName, Experiment, sep = "_")) %>%
+               FileName2 = paste(FileName, Experiment, sep = "_"),
+               FractionOfParent = round(FractionOfParent,2)) %>%
         filter(!str_detect(FileName, "Compensation")) # remove compensation files
       
     }
@@ -236,13 +243,14 @@ server <- function(input, output, session) {
           mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
                  Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
                  FileName2 = paste(FileName, Experiment, sep = "_"),
-                 Population = str_extract(PopulationFullPath, "[^\\/]*$")) %>%
+                 Population = str_extract(PopulationFullPath, "[^\\/]*$"),
+                 value = round(value,0)) %>%
           filter(!str_detect(FileName, "Compensation")) %>% # remove compensation files
           select(-PopulationFullPath) %>%
           left_join(filter_data %>% distinct(FileName, .keep_all = T) %>% select(FileName, group),by= "FileName" )
       }
       
-      print(sd)
+      #print(sd)
       
       sd <- do.call(bind_rows, sd) # combine all wsps.
       
@@ -313,6 +321,43 @@ server <- function(input, output, session) {
   # varName: name of the group (column name for the variable)
   # var: string input for mining the text
   # var2: name for the mined text under the varName column
+
+  
+  presetListN <- eventReactive(input$presetUpdate,{
+    
+    newp <- readRDS(input$presetUpdate[1,4])
+    
+    newp <- do.call(bind_rows, newp)
+    
+    new_names <- pull(newp[,1])
+    
+
+    
+    for(i in 1:nrow(newp)){
+      new_presets[[i]] <- c(pull(newp[i,2]),pull(newp[i,3]))
+    }
+    
+    
+    
+    final_presets <- c(presetList, new_presets)
+    
+    names(final_presets) <- c(names(presetList),new_names)
+    
+    print(final_presets)
+    return(final_presets)
+    
+  })
+  
+  observeEvent(presetListN(),{
+    
+    if(!is.null(presetListN()) ){
+      presetList <<- presetListN()
+      
+    }
+    
+  })
+
+  
   
   observeEvent(metadata(), {
     
@@ -359,7 +404,11 @@ server <- function(input, output, session) {
         column(2,
                
                actionButton("combine", "Combine",class="btn btn-success")
-               )
+               ),
+        column(2,offset = 1,
+               
+               downloadButton("dpreset", "Download Preset",class="btn btn-success")
+        )
       )
       
       
@@ -375,24 +424,26 @@ server <- function(input, output, session) {
     # not changeable as long as the preset is selected.
     # ------------ Maybe if I use isolate somewhere it wont update it?
   
-  # I separated the two below so that you can edit the presets now on the go.
+   # separated the two below so that you can edit the presets now on the go.
+    #still a problemmm
+
   observeEvent(input$var,{
-  
-      updateTextAreaInput(session, "var2",
-                          value = input$var)
+    
+    updateTextAreaInput(session, "var2",
+                        value = input$var)
     
   })
   
   observeEvent(input$preset,{
     
-      if(input$preset != ""){
-        
-        updateTextAreaInput(session, "var",
-                            value = presetList[[input$preset]][1])
-        updateTextAreaInput(session, "var2",
-                            value = presetList[[input$preset]][2])
-        updateTextInput(session, "varName",
-                        value = input$preset)
+    if(input$preset != ""){
+      
+      updateTextAreaInput(session, "var",
+                          value = presetList[[input$preset]][1])
+      updateTextAreaInput(session, "var2",
+                          value = presetList[[input$preset]][2])
+      updateTextInput(session, "varName",
+                      value = input$preset)
       
     }
     
@@ -400,8 +451,13 @@ server <- function(input, output, session) {
 
   # Upon clicking update Table it mines the FileName according to the given input and creates a new column.
   
+  savePreset <- reactiveVal()
   
   observeEvent(input$updateMeta,{
+    
+    savep <- list(c(varName = input$varName, var = input$var, var2= input$var2))
+    
+    savePreset(c(savep, savePreset()))
     
     # If the given input is shorter than 12 (e.g. 3 values entered.)
     # 1 2 3 + and nine 3s more to complete it to 12.
@@ -449,9 +505,15 @@ server <- function(input, output, session) {
     
     pc <- left_join(percentdata(),metadata(), by=c("FileName2", "FileName", "Experiment", "group") )
     
+    xpc <- colnames(pc)[!(colnames(pc) %in% c("FractionOfParent", "Experiment", "FileName", "FileName2")) ]
+    
     pc <- pc %>%
-      select(-FileName2) %>%
-      pivot_wider(names_from = Experiment, values_from = FractionOfParent)
+      select(-c(FileName,FileName2) ) %>%
+      group_by(across(c(all_of(xpc), "Experiment"))) %>%
+      mutate(n = row_number()) %>%
+      pivot_wider(id_cols = c(n, all_of(xpc)),
+                  names_from = Experiment, values_from = FractionOfParent)%>%
+      select(-1)
     
     percCombine(pc)
 
@@ -460,10 +522,17 @@ server <- function(input, output, session) {
     ### stat part
     
     if(!is.null(statdata())){
-      sc <- left_join(statdata(),metadata(), by=c("FileName2", "FileName", "Experiment", "group") )
+      sc <- left_join(statdata() %>% select(!group),metadata(), by=c("FileName2", "FileName", "Experiment") )
+      
+      xsc <- colnames(sc)[!(colnames(sc) %in% c("value", "Experiment", "FileName", "FileName2")) ]
+      
       sc <- sc %>%
-        select(-FileName2) %>%
-        pivot_wider(names_from = Experiment, values_from = value)
+        select(-c(FileName,FileName2) ) %>%
+        group_by(across(c(all_of(xsc), "Experiment"))) %>%
+        mutate(n = row_number()) %>%
+        pivot_wider(id_cols = c(n, all_of(xsc)),
+                    names_from = Experiment, values_from = value)%>%
+        select(-1)
       
       statCombine(sc)
       
@@ -511,6 +580,11 @@ server <- function(input, output, session) {
   output$ds <- downloadHandler(
     filename = function() {"datastat.xlsx"},
     content = function(file) {write_xlsx(statCombine(), path = file)}
+  )
+  
+  output$dpreset <- downloadHandler(
+    filename = function() {"presets.rds"},
+    content = function(file) {saveRDS(object = savePreset(),file)}
   )
   
 }
