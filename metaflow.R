@@ -36,7 +36,8 @@ ui <- fluidPage(
   ## Upload WSPs
   sidebarPanel(width = 2,
                fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T),
-               
+               fileInput("presetUpdate", label = "Upload Preset", accept = ".rds",multiple = F),
+  
                hr(),
                
                checkboxGroupInput("filtergroup", label = "Filter groups", choices = character(0)),
@@ -51,19 +52,21 @@ ui <- fluidPage(
                 tabPanel("First panelll", 
 
       # Displays the uploaded file names
-      verbatimTextOutput("exps"),
+      #verbatimTextOutput("exps"),
       fluidRow(
         
         column(5,
                # Annotate the experiment with initials and numbers of the individual experiments
                div(id = "expID"),
-        ),
-        
-        column(2,offset = 4,
-               downloadButton("dm", "Download Meta",class="btn btn-info btn-sm"),
-               fileInput("presetUpdate", label = "Upload Preset", accept = ".rds",multiple = F),
-               hr()     
         )
+      
+      ),
+      
+      fluidRow(
+        column(2,offset = 9,
+               downloadButton("dm", "Download Meta",class="btn btn-info btn-sm")
+        )
+
       ),
 
                      
@@ -113,6 +116,36 @@ ui <- fluidPage(
 
              dataTableOutput("stattab")
              
+    ),
+    
+    tabPanel("Stats Pannel 2", 
+             fluidRow(
+               column(4,
+                      radioButtons("colnp", label = "Column", choices = "")
+               ),
+               column(4,
+                      radioButtons("negc2", label = "negative control", choices = "")
+               ),
+               column(3,
+                      radioButtons("posc2", label = "positive control", choices = "")
+               ),
+               column(1,
+                      actionButton("rearrange", label = "Rearrange")
+                      )
+             ),
+             
+             fluidRow(
+               column(10,
+                      checkboxGroupInput("arrcol3", label = "Arrange", choices = character(0),inline = T)
+               ),
+               column(2,
+                      downloadButton("ds2","Download",class="btn btn-info btn-sm")
+               )
+             ),
+             
+             
+             dataTableOutput("stattab2")
+             
     )
              
     )
@@ -138,6 +171,7 @@ server <- function(input, output, session) {
       
     }
     
+    print(input$files)
     return(fd)
   })
   
@@ -163,6 +197,10 @@ server <- function(input, output, session) {
       selector = '#expID',
       where = "beforeEnd",
       ui = tagList(
+        
+        fluidRow(
+          verbatimTextOutput("exps")
+        ),
         textInput(inputId = "ini", 
                   label = tags$em("Initials")),
         textInput(inputId = "idi", 
@@ -177,7 +215,7 @@ server <- function(input, output, session) {
     
     if(wss()[1]!= 1){
       
-      rev(wss())  
+      rev(paste(wss(), collapse = "\n") )  
     }
     
   })
@@ -585,7 +623,112 @@ server <- function(input, output, session) {
     
   },options = list(pageLength = 100))
 
+  
+  statCombine2 <- reactiveVal()
+  
+  observeEvent(statCombine(),{
 
+    if(!is.null(statCombine())){
+      updateRadioButtons(inputId = "colnp", choices = colnames(statCombine())[5:(ncol(statCombine())-isolate({length(flowdata())})) ])
+
+    }
+
+    
+    print("b")
+  },ignoreNULL = T,once = T)
+  
+  observeEvent(input$colnp,{
+    if(input$colnp != ""){
+      updateRadioButtons(inputId = "negc2", choices = unique(pull(statCombine(),input$colnp)) )
+      updateRadioButtons(inputId = "posc2", choices = unique(pull(statCombine(),input$colnp)) )
+    }
+
+  })
+  
+  observeEvent(input$rearrange,{
+    
+    if(input$negc2 != ""){
+    
+    exp_vector <- unique(isolate({metadata()$Experiment}))
+    slong <- statCombine() %>% pivot_longer(cols = all_of(exp_vector),names_to = "Experiment") %>% 
+      ungroup() # IMPORTANTTTTTTTTTT
+  
+    
+    user_added <- colnames(slong)[5:(ncol(slong)-2)]
+    
+    negativec <- slong %>%
+      filter(.data[[input$colnp]] %in% input$negc2 ) %>%
+      select(-c(all_of(user_added))) %>% # user added columns remove
+      rename(value_negative = "value")
+
+     slong2 <- slong %>% ungroup() %>% left_join(negativec)
+    
+      if(input$posc2 != ""){
+        positivec <- slong %>%
+          filter(.data[[input$colnp]] %in% input$posc2 ) %>%
+          select(-c(all_of(user_added))) %>% # user added columns remove
+          rename(value_positive = "value")
+        
+        slong2 <- slong2 %>% ungroup() %>%left_join(positivec)
+      }
+   
+
+    slong3 <- slong2 %>%
+      mutate(value_norm = value - value_negative)
+    
+    if(input$posc2 != ""){
+      
+    slong3 <- slong3 %>% 
+        mutate(perc_change = (100*value_norm)/value_positive)
+      
+    }
+    
+  #  b <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative")) ] 
+  #  
+  # print(b)  
+  #
+  #  slong4 <- slong3 %>%
+  #    select(-c(value, value_negative)) %>%
+  #    group_by(across(all_of(b))) %>%
+  #    mutate(n = row_number()) %>%
+  #    pivot_wider(  id_cols = all_of(c(n, colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "Experiment")) ])),
+  #                  names_from = Experiment, names_sep = ".", values_from = c(value_negative))
+
+    #print(slong3)
+    if(input$posc2 != ""){
+      
+      b2 <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "value_positive", "value", "value_norm", "perc_change")) ]
+      b3 <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "value_positive","Experiment" ,"value", "value_norm", "perc_change")) ]
+      
+      slong4 <- slong3 %>%
+        select(-c(value, value_negative, value_positive)) %>%
+        group_by(across(all_of(b2))) %>%
+        mutate(n = row_number()) %>%
+        pivot_wider(  id_cols = c(n, all_of(b3)),
+                      names_from = Experiment, names_sep = ".", values_from = c(value_norm, perc_change))
+      
+      
+    }
+    
+    statCombine2(slong4)
+    
+    }
+  })
+  
+  output$stattab2 <- renderDataTable({
+    
+    if(!is.null(statCombine2()) ){
+      
+      p2 <- statCombine2() %>%
+        arrange(across(all_of(input$arrcol3)))
+      
+      statCombine2(p2)
+      
+      p2
+      
+    }
+    
+  },options = list(pageLength = 100))
     
   output$dm <- downloadHandler(
     filename = function() {"metadata.xlsx"},
@@ -600,6 +743,11 @@ server <- function(input, output, session) {
   output$ds <- downloadHandler(
     filename = function() {"datastat.xlsx"},
     content = function(file) {write_xlsx(statCombine(), path = file)}
+  )
+  
+  output$ds2 <- downloadHandler(
+    filename = function() {"datastat_norm.xlsx"},
+    content = function(file) {write_xlsx(statCombine2(), path = file)}
   )
   
   output$dpreset <- downloadHandler(
