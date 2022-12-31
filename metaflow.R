@@ -6,6 +6,7 @@ library(writexl)
 
 fd <- list()
 md <- list()
+filter_data <- list()
 pd <- list()
 sd <- list()
 new_presets <- list()
@@ -18,6 +19,7 @@ namesss <- c()
 # --- download button 
 # --- shinyjs disable
 # --- var var2 update problem presets overwrite
+# --- a 4th tab unstim negative positive control pasting before pivot wider
 
 # Presets
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
@@ -147,7 +149,11 @@ server <- function(input, output, session) {
     
     
     for(i in 1:length(flowdata())){
-      wss(c(unique(flowdata()[[i]][[1]]$ws), wss()) )
+      #w1 <- str_extract(unique(flowdata()[[i]][[1]]$FilePath), "[^\\/]*$")
+      w1 <- unique(flowdata()[[i]][[1]]$ws)
+      w1 <- str_replace_all(w1, "%20", " ")   
+      
+      wss(c(w1, wss())) 
     }
     
     wss(wss()[-length(wss())])
@@ -209,11 +215,15 @@ server <- function(input, output, session) {
     
     # Have the filter data separately by considering the first file only. The target gate names should be same also in other files
     # i.e. it should be CD4 in all but not cd_4 in the other file.
-    
-    filter_data <- flowdata()[[1]][[1]] %>%
-      select(c(FileName, Population, group)) %>%
-      mutate(FileName = str_replace_all(FileName, "%20", " ")) %>% #required for adding to statdata
-      filter(!str_detect(FileName, "Compensation")) 
+    for(i in 1:length(flowdata())){
+      
+      filter_data[[i]] <- flowdata()[[i]][[1]] %>%
+        select(c(FileName, Population, group)) %>%
+        mutate(FileName = str_replace_all(FileName, "%20", " ")) %>% #required for adding to statdata
+        filter(!str_detect(FileName, "Compensation")) 
+      
+    }
+
     
     filterdata(filter_data)
     
@@ -247,11 +257,9 @@ server <- function(input, output, session) {
                  value = round(value,0)) %>%
           filter(!str_detect(FileName, "Compensation")) %>% # remove compensation files
           select(-PopulationFullPath) %>%
-          left_join(filter_data %>% distinct(FileName, .keep_all = T) %>% select(FileName, group),by= "FileName" )
+          left_join(filter_data[[i]] %>% distinct(FileName, .keep_all = T) %>% select(FileName, group),by= "FileName" )
       }
-      
-      #print(sd)
-      
+
       sd <- do.call(bind_rows, sd) # combine all wsps.
       
       statdata(sd)
@@ -261,8 +269,10 @@ server <- function(input, output, session) {
   })
   
   observeEvent(filterdata(),{
-    updateCheckboxGroupInput(inputId = "filtergroup",choices = unique(filterdata()$group) )
-    updateCheckboxGroupInput(inputId = "percentage",choices = unique(filterdata()$Population) )
+    dc_filterdata <- do.call(bind_rows, filterdata())
+    
+    updateCheckboxGroupInput(inputId = "filtergroup",choices = unique(dc_filterdata$group) )
+    updateCheckboxGroupInput(inputId = "percentage",choices = unique(dc_filterdata$Population) )
     
   })
   
@@ -275,6 +285,7 @@ server <- function(input, output, session) {
       filter(group %in% input$filtergroup)
     percentdata(pfilter)
     
+
     if(!is.null(flowdata()[[1]][[2]])){
       sfilter <- statdata() %>%
         filter(group %in% input$filtergroup)
@@ -296,7 +307,7 @@ server <- function(input, output, session) {
     #    select(-FileName2) %>%
     #      pivot_wider(names_from = Experiment, values_from = FractionOfParent)
     
-    print(xget_perc)
+    #print(xget_perc)
     percentdata(xget_perc)
     
   })
@@ -343,7 +354,7 @@ server <- function(input, output, session) {
     
     names(final_presets) <- c(names(presetList),new_names)
     
-    print(final_presets)
+    #print(final_presets)
     return(final_presets)
     
   })
@@ -517,12 +528,14 @@ server <- function(input, output, session) {
     
     percCombine(pc)
 
-    updateCheckboxGroupInput(inputId = "arrcol", choices = colnames(percCombine()))
+    updateCheckboxGroupInput(inputId = "arrcol", choices = colnames(percCombine()),inline = T)
     
     ### stat part
     
     if(!is.null(statdata())){
-      sc <- left_join(statdata() %>% select(!group),metadata(), by=c("FileName2", "FileName", "Experiment") )
+      
+      #print(statdata())
+      sc <- left_join(statdata(),metadata(), by=c("FileName2", "FileName", "Experiment", "group") )
       
       xsc <- colnames(sc)[!(colnames(sc) %in% c("value", "Experiment", "FileName", "FileName2")) ]
       
@@ -536,7 +549,7 @@ server <- function(input, output, session) {
       
       statCombine(sc)
       
-      updateCheckboxGroupInput(inputId = "arrcol2", choices = colnames(statCombine()))
+      updateCheckboxGroupInput(inputId = "arrcol2", choices = colnames(statCombine()),inline = T)
     }
 
 
@@ -547,9 +560,12 @@ server <- function(input, output, session) {
     
     if(!is.null(percCombine())){
       
-        percCombine() %>%
+        p1 <- percCombine() %>%
           arrange(across(all_of(input$arrcol)))
 
+        percCombine(p1)
+        
+        p1
     }
 
   },options = list(pageLength = 100))
@@ -558,8 +574,12 @@ server <- function(input, output, session) {
     
     if(!is.null(statCombine()) ){
       
-      statCombine() %>%
+      p2 <- statCombine() %>%
         arrange(across(all_of(input$arrcol2)))
+      
+      statCombine(p2)
+      
+      p2
       
     }
     
