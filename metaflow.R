@@ -20,6 +20,7 @@ namesss <- c()
 # --- shinyjs disable
 # --- var var2 update problem presets overwrite
 # --- a 4th tab unstim negative positive control pasting before pivot wider
+## if it is mfi of positive pop then subtract from negative pop mfi
 
 # Presets
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
@@ -120,15 +121,16 @@ ui <- fluidPage(
     
     tabPanel("Stats Pannel 2", 
              fluidRow(
-               column(4,
+               column(3,
                       radioButtons("colnp", label = "Column", choices = "")
                ),
-               column(4,
+               column(3,
                       radioButtons("negc2", label = "negative control", choices = "")
                ),
                column(3,
                       radioButtons("posc2", label = "positive control", choices = "")
                ),
+               
                column(1,
                       actionButton("rearrange", label = "Rearrange")
                       )
@@ -215,7 +217,7 @@ server <- function(input, output, session) {
     
     if(wss()[1]!= 1){
       
-      rev(paste(wss(), collapse = "\n") )  
+      paste(rev(wss()), collapse = "\n") 
     }
     
   })
@@ -272,7 +274,7 @@ server <- function(input, output, session) {
         mutate(FileName = str_replace_all(FileName, "%20", " "), # remove %20 
                Experiment = paste0(input$ini,str_split(input$idi, pattern = " ")[[1]][i]), 
                FileName2 = paste(FileName, Experiment, sep = "_"),
-               FractionOfParent = round(FractionOfParent,2)) %>%
+               FractionOfParent = round(FractionOfParent*100,2)) %>%
         filter(!str_detect(FileName, "Compensation")) # remove compensation files
       
     }
@@ -578,7 +580,7 @@ server <- function(input, output, session) {
       xsc <- colnames(sc)[!(colnames(sc) %in% c("value", "Experiment", "FileName", "FileName2")) ]
       
       sc <- sc %>%
-        select(-c(FileName,FileName2) ) %>%
+        select(-c(FileName,FileName2) ) %>%  #         mutate(channel = "")%>% #delete
         group_by(across(c(all_of(xsc), "Experiment"))) %>%
         mutate(n = row_number()) %>%
         pivot_wider(id_cols = c(n, all_of(xsc)),
@@ -630,6 +632,7 @@ server <- function(input, output, session) {
 
     if(!is.null(statCombine())){
       updateRadioButtons(inputId = "colnp", choices = colnames(statCombine())[5:(ncol(statCombine())-isolate({length(flowdata())})) ])
+      #updateCheckboxGroupInput(inputId = "popout", choices = unique(statCombine()$Population) )
 
     }
 
@@ -660,26 +663,47 @@ server <- function(input, output, session) {
       filter(.data[[input$colnp]] %in% input$negc2 ) %>%
       select(-c(all_of(user_added))) %>% # user added columns remove
       rename(value_negative = "value")
-
-     slong2 <- slong %>% ungroup() %>% left_join(negativec)
     
+    if(sum(str_detect(unique(negativec$Population), "\\+$")) > 0){
+      negativec <- negativec %>%
+        filter(!(str_detect(Population, "\\+$"))) %>%
+        mutate(Population = str_replace(Population, pattern = "\\-$", replacement = "\\+"))
+    }
+
+    #print(negativec)
+     slong2 <- slong %>%  left_join(negativec)
+     
       if(input$posc2 != ""){
         positivec <- slong %>%
           filter(.data[[input$colnp]] %in% input$posc2 ) %>%
           select(-c(all_of(user_added))) %>% # user added columns remove
           rename(value_positive = "value")
+       # print(positivec)
         
-        slong2 <- slong2 %>% ungroup() %>%left_join(positivec)
-      }
-   
+        if(sum(str_detect(unique(positivec$Population), "\\+$")) > 0){
+          positivec <- positivec %>%
+            filter(!(str_detect(Population, "\\-$"))) 
 
-    slong3 <- slong2 %>%
-      mutate(value_norm = value - value_negative)
+        }
+        
+        
+        slong2 <- slong2 %>% left_join(positivec)
+      }
+     
+   
+     # remove - populations, we dont need them :)
+
+    slong2ff <- slong2 %>%
+        filter(!(str_detect(Population, "\\-$")))
+     
+     
+    slong3 <- slong2ff %>%
+      mutate(value_norm = round(value - value_negative, 2) )
     
     if(input$posc2 != ""){
       
     slong3 <- slong3 %>% 
-        mutate(perc_change = (100*value_norm)/value_positive)
+        mutate(perc_change = round((100*value_norm)/value_positive, 2) )
       
     }
     
@@ -705,10 +729,13 @@ server <- function(input, output, session) {
         group_by(across(all_of(b2))) %>%
         mutate(n = row_number()) %>%
         pivot_wider(  id_cols = c(n, all_of(b3)),
-                      names_from = Experiment, names_sep = ".", values_from = c(value_norm, perc_change))
+                      names_from = Experiment, names_sep = ".", values_from = c(value_norm, perc_change)) %>%
+        select(-1)
       
       
     }
+    
+    updateCheckboxGroupInput(inputId = "arrcol3", choices = colnames(slong4)[1:(ncol(slong4)-6)],inline = T)
     
     statCombine2(slong4)
     
