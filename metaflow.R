@@ -21,6 +21,7 @@ namesss <- c()
 # --- var var2 update problem presets overwrite
 # --- a 4th tab unstim negative positive control pasting before pivot wider
 ## if it is mfi of positive pop then subtract from negative pop mfi
+## why does it require all columns to be named for stat calculation 2
 
 # Presets
 stimulation <- c("unstim\nCD28|328\nCD3", "unstim\nCD3+CD28\nCD3") 
@@ -38,7 +39,7 @@ ui <- fluidPage(
   sidebarPanel(width = 2,
                fileInput("files", "Choose Wsp File", accept = ".wsp", multiple = T),
                fileInput("presetUpdate", label = "Upload Preset", accept = ".rds",multiple = F),
-  
+               
                hr(),
                
                checkboxGroupInput("filtergroup", label = "Filter groups", choices = character(0)),
@@ -51,105 +52,105 @@ ui <- fluidPage(
     
     tabsetPanel(type = "tabs",
                 tabPanel("First panelll", 
-
-      # Displays the uploaded file names
-      #verbatimTextOutput("exps"),
-      fluidRow(
-        
-        column(5,
-               # Annotate the experiment with initials and numbers of the individual experiments
-               div(id = "expID"),
-        )
-      
-      ),
-      
-      fluidRow(
-        column(2,offset = 9,
-               downloadButton("dm", "Download Meta",class="btn btn-info btn-sm")
-        )
-
-      ),
-
-                     
-      fluidRow(
-        # Group name, string input and their names UI
-        column(5,
-               div(id = "group"),
-               div(id = "vars"),
-               div(id = "combmeta")
-        ),
-        
-        column(7,
-
-               # metadata table
-               dataTableOutput("metatable")
-        )
-        
-      )
-      
-    ),
-    tabPanel("Percentage Pannel", 
-             
-             fluidRow(
-               column(10,
-                      checkboxGroupInput("arrcol", label = "Arrange", choices = character(0),inline = T)
-                      ),
-               column(2,
-                      downloadButton("dp","Download",class="btn btn-info btn-sm")
-                      )
-             ),
-             
-             
-             dataTableOutput("perctab")
-    
-             ),
-    tabPanel("Stats Pannel", 
-             
-             fluidRow(
-               column(10,
-                      checkboxGroupInput("arrcol2", label = "Arrange", choices = character(0),inline = T)
-               ),
-               column(2,
-                      downloadButton("ds","Download",class="btn btn-info btn-sm")
-               )
-             ),
-             
-
-             dataTableOutput("stattab")
-             
-    ),
-    
-    tabPanel("Stats Pannel 2", 
-             fluidRow(
-               column(3,
-                      radioButtons("colnp", label = "Column", choices = "")
-               ),
-               column(3,
-                      radioButtons("negc2", label = "negative control", choices = "")
-               ),
-               column(3,
-                      radioButtons("posc2", label = "positive control", choices = "")
-               ),
-               
-               column(1,
-                      actionButton("rearrange", label = "Rearrange")
-                      )
-             ),
-             
-             fluidRow(
-               column(10,
-                      checkboxGroupInput("arrcol3", label = "Arrange", choices = character(0),inline = T)
-               ),
-               column(2,
-                      downloadButton("ds2","Download",class="btn btn-info btn-sm")
-               )
-             ),
-             
-             
-             dataTableOutput("stattab2")
-             
-    )
-             
+                         
+                         # Displays the uploaded file names
+                         #verbatimTextOutput("exps"),
+                         fluidRow(
+                           
+                           column(5,
+                                  # Annotate the experiment with initials and numbers of the individual experiments
+                                  div(id = "expID"),
+                           )
+                           
+                         ),
+                         
+                         fluidRow(
+                           column(2,offset = 9,
+                                  downloadButton("dm", "Download Meta",class="btn btn-info btn-sm")
+                           )
+                           
+                         ),
+                         
+                         
+                         fluidRow(
+                           # Group name, string input and their names UI
+                           column(5,
+                                  div(id = "group"),
+                                  div(id = "vars"),
+                                  div(id = "combmeta")
+                           ),
+                           
+                           column(7,
+                                  
+                                  # metadata table
+                                  dataTableOutput("metatable")
+                           )
+                           
+                         )
+                         
+                ),
+                tabPanel("Percentage Pannel", 
+                         
+                         fluidRow(
+                           column(10,
+                                  checkboxGroupInput("arrcol", label = "Arrange", choices = character(0),inline = T)
+                           ),
+                           column(2,
+                                  downloadButton("dp","Download",class="btn btn-info btn-sm")
+                           )
+                         ),
+                         
+                         
+                         dataTableOutput("perctab")
+                         
+                ),
+                tabPanel("Stats Pannel", 
+                         
+                         fluidRow(
+                           column(10,
+                                  checkboxGroupInput("arrcol2", label = "Arrange", choices = character(0),inline = T)
+                           ),
+                           column(2,
+                                  downloadButton("ds","Download",class="btn btn-info btn-sm")
+                           )
+                         ),
+                         
+                         
+                         dataTableOutput("stattab")
+                         
+                ),
+                
+                tabPanel("Stats Pannel 2", 
+                         fluidRow(
+                           column(3,
+                                  radioButtons("colnp", label = "Column", choices = "")
+                           ),
+                           column(3,
+                                  radioButtons("negc2", label = "negative control", choices = "")
+                           ),
+                           column(3,
+                                  radioButtons("posc2", label = "positive control", choices = "")
+                           ),
+                           
+                           column(1,
+                                  actionButton("rearrange", label = "Rearrange")
+                           )
+                         ),
+                         
+                         fluidRow(
+                           column(10,
+                                  checkboxGroupInput("arrcol3", label = "Arrange", choices = character(0),inline = T)
+                           ),
+                           column(2,
+                                  downloadButton("ds2","Download",class="btn btn-info btn-sm")
+                           )
+                         ),
+                         
+                         
+                         dataTableOutput("stattab2")
+                         
+                )
+                
     )
     
   )
@@ -194,7 +195,7 @@ server <- function(input, output, session) {
     
     wss(wss()[-length(wss())])
     
-
+    
     insertUI(
       selector = '#expID',
       where = "beforeEnd",
@@ -209,7 +210,7 @@ server <- function(input, output, session) {
                   label = tags$em("Experiment IDs")),
         actionButton("submitID", "Submit",class="btn btn-info"))
     )
-  
+    
   })
   
   ## Display the wsp files if any file uploaded
@@ -263,7 +264,7 @@ server <- function(input, output, session) {
         filter(!str_detect(FileName, "Compensation")) 
       
     }
-
+    
     
     filterdata(filter_data)
     
@@ -285,7 +286,7 @@ server <- function(input, output, session) {
     
     # gives an error when there is no stat calculation
     if(!is.null(flowdata()[[1]][[2]])){
-    
+      
       
       for(i in 1:length(flowdata())){
         sd[[i]] <- flowdata()[[i]][[2]] %>%
@@ -299,11 +300,11 @@ server <- function(input, output, session) {
           select(-PopulationFullPath) %>%
           left_join(filter_data[[i]] %>% distinct(FileName, .keep_all = T) %>% select(FileName, group),by= "FileName" )
       }
-
+      
       sd <- do.call(bind_rows, sd) # combine all wsps.
       
       statdata(sd)
-    
+      
     } 
     #print(per_data)
   })
@@ -318,20 +319,20 @@ server <- function(input, output, session) {
   
   observeEvent(input$filtergroupb,{
     mfilter <- metadata() %>%
-                filter(group %in% input$filtergroup)
+      filter(group %in% input$filtergroup)
     metadata(mfilter)
     
     pfilter <- percentdata() %>%
       filter(group %in% input$filtergroup)
     percentdata(pfilter)
     
-
+    
     if(!is.null(flowdata()[[1]][[2]])){
       sfilter <- statdata() %>%
         filter(group %in% input$filtergroup)
       statdata(sfilter)
     }
-  
+    
   })
   
   observeEvent(input$get_perc,{
@@ -341,7 +342,7 @@ server <- function(input, output, session) {
     #xget_perc <- percentdata() %>%
     #  filter(Population %in% input$percentage) %>%
     #    pivot_wider(names_from = Population, values_from = FractionOfParent)
-  
+    
     #xget_perc <- percentdata() %>%
     #  filter(Population %in% input$percentage) %>%
     #    select(-FileName2) %>%
@@ -372,7 +373,7 @@ server <- function(input, output, session) {
   # varName: name of the group (column name for the variable)
   # var: string input for mining the text
   # var2: name for the mined text under the varName column
-
+  
   
   presetListN <- eventReactive(input$presetUpdate,{
     
@@ -382,7 +383,7 @@ server <- function(input, output, session) {
     
     new_names <- pull(newp[,1])
     
-
+    
     
     for(i in 1:nrow(newp)){
       new_presets[[i]] <- c(pull(newp[i,2]),pull(newp[i,3]))
@@ -407,7 +408,7 @@ server <- function(input, output, session) {
     }
     
   })
-
+  
   
   
   observeEvent(metadata(), {
@@ -427,7 +428,7 @@ server <- function(input, output, session) {
       selector = '#vars',
       where = "beforeEnd",
       ui = tagList(
-
+        
         column(12,
                column(5,textAreaInput(inputId = "var",resize = "none", width = '550px', height = '220px', 
                                       label = tags$em("String"))),
@@ -437,7 +438,7 @@ server <- function(input, output, session) {
         
         
       )
-
+      
       
     )
     
@@ -455,7 +456,7 @@ server <- function(input, output, session) {
         column(2,
                
                actionButton("combine", "Combine",class="btn btn-success")
-               ),
+        ),
         column(2,offset = 1,
                
                downloadButton("dpreset", "Download Preset",class="btn btn-success")
@@ -472,12 +473,12 @@ server <- function(input, output, session) {
   # If no preset selected update the var2 according to the inputs from var (string).
   # One can manually change the experimental group names (var2) also.
   # If preset selected, shows you how it looks like at textAreas and it applies it when you click update.
-    # not changeable as long as the preset is selected.
-    # ------------ Maybe if I use isolate somewhere it wont update it?
+  # not changeable as long as the preset is selected.
+  # ------------ Maybe if I use isolate somewhere it wont update it?
   
-   # separated the two below so that you can edit the presets now on the go.
-    #still a problemmm
-
+  # separated the two below so that you can edit the presets now on the go.
+  #still a problemmm
+  
   observeEvent(input$var,{
     
     updateTextAreaInput(session, "var2",
@@ -499,7 +500,7 @@ server <- function(input, output, session) {
     }
     
   })
-
+  
   # Upon clicking update Table it mines the FileName according to the given input and creates a new column.
   
   savePreset <- reactiveVal()
@@ -567,7 +568,7 @@ server <- function(input, output, session) {
       select(-1)
     
     percCombine(pc)
-
+    
     updateCheckboxGroupInput(inputId = "arrcol", choices = colnames(percCombine()),inline = T)
     
     ### stat part
@@ -580,7 +581,8 @@ server <- function(input, output, session) {
       xsc <- colnames(sc)[!(colnames(sc) %in% c("value", "Experiment", "FileName", "FileName2")) ]
       
       sc <- sc %>%
-        select(-c(FileName,FileName2) ) %>%  #         mutate(channel = "")%>% #delete
+        select(-c(FileName,FileName2) ) %>% 
+        #mutate(channel = "Comp-FITC-A")%>% #delete#         mutate(channel = "Comp-FITC-A")%>% #delete
         group_by(across(c(all_of(xsc), "Experiment"))) %>%
         mutate(n = row_number()) %>%
         pivot_wider(id_cols = c(n, all_of(xsc)),
@@ -591,8 +593,8 @@ server <- function(input, output, session) {
       
       updateCheckboxGroupInput(inputId = "arrcol2", choices = colnames(statCombine()),inline = T)
     }
-
-
+    
+    
     
   })
   
@@ -600,14 +602,14 @@ server <- function(input, output, session) {
     
     if(!is.null(percCombine())){
       
-        p1 <- percCombine() %>%
-          arrange(across(all_of(input$arrcol)))
-
-        percCombine(p1)
-        
-        p1
+      p1 <- percCombine() %>%
+        arrange(across(all_of(input$arrcol)))
+      
+      percCombine(p1)
+      
+      p1
     }
-
+    
   },options = list(pageLength = 100))
   
   output$stattab <- renderDataTable({
@@ -624,18 +626,18 @@ server <- function(input, output, session) {
     }
     
   },options = list(pageLength = 100))
-
+  
   
   statCombine2 <- reactiveVal()
   
   observeEvent(statCombine(),{
-
+    
     if(!is.null(statCombine())){
       updateRadioButtons(inputId = "colnp", choices = colnames(statCombine())[5:(ncol(statCombine())-isolate({length(flowdata())})) ])
       #updateCheckboxGroupInput(inputId = "popout", choices = unique(statCombine()$Population) )
-
+      
     }
-
+    
     
     print("b")
   },ignoreNULL = T,once = T)
@@ -645,100 +647,103 @@ server <- function(input, output, session) {
       updateRadioButtons(inputId = "negc2", choices = unique(pull(statCombine(),input$colnp)) )
       updateRadioButtons(inputId = "posc2", choices = unique(pull(statCombine(),input$colnp)) )
     }
-
+    
   })
   
   observeEvent(input$rearrange,{
     
     if(input$negc2 != ""){
-    
-    exp_vector <- unique(isolate({metadata()$Experiment}))
-    slong <- statCombine() %>% pivot_longer(cols = all_of(exp_vector),names_to = "Experiment") %>% 
-      ungroup() # IMPORTANTTTTTTTTTT
-  
-    
-    user_added <- colnames(slong)[5:(ncol(slong)-2)]
-    
-    negativec <- slong %>%
-      filter(.data[[input$colnp]] %in% input$negc2 ) %>%
-      select(-c(all_of(user_added))) %>% # user added columns remove
-      rename(value_negative = "value")
-    
-    if(sum(str_detect(unique(negativec$Population), "\\+$")) > 0){
-      negativec <- negativec %>%
-        filter(!(str_detect(Population, "\\+$"))) %>%
-        mutate(Population = str_replace(Population, pattern = "\\-$", replacement = "\\+"))
-    }
-
-    #print(negativec)
-     slong2 <- slong %>%  left_join(negativec)
-     
+      
+      exp_vector <- unique(isolate({metadata()$Experiment}))
+      slong <- statCombine() %>% pivot_longer(cols = all_of(exp_vector),names_to = "Experiment") %>% 
+        ungroup() # IMPORTANTTTTTTTTTT
+      
+      
+      user_added <- colnames(slong)[5:(ncol(slong)-2)]
+      
+      negativec <- slong %>%
+        filter(.data[[input$colnp]] %in% input$negc2 ) %>%
+        select(-c(all_of(user_added))) %>% # user added columns remove
+        rename(value_negative = "value")
+      
+      if(sum(str_detect(unique(negativec$Population), "\\+$")) > 0){
+        negativec <- negativec %>%
+          filter(!(str_detect(Population, "\\+$"))) %>%
+          mutate(Population = str_replace(Population, pattern = "\\-$", replacement = "\\+"))
+      }
+      
+      #print(negativec)
+      slong2 <- slong %>%  left_join(negativec)
+      
+      
+      # remove - populations, we dont need them :)
+      
+      slong2ff <- slong2 %>%
+        filter(!(str_detect(Population, "\\-$")))
+      
+      
+      slong3 <- slong2ff %>%
+        mutate(value_norm = round(value - value_negative, 2) )
+      
       if(input$posc2 != ""){
-        positivec <- slong %>%
+        positivec <- slong3 %>%
           filter(.data[[input$colnp]] %in% input$posc2 ) %>%
-          select(-c(all_of(user_added))) %>% # user added columns remove
-          rename(value_positive = "value")
-       # print(positivec)
+          select(-c(all_of(user_added), "value", "value_negative")) %>% # user added columns remove
+          rename(value_positive = "value_norm")
+        # print(positivec)
         
         if(sum(str_detect(unique(positivec$Population), "\\+$")) > 0){
           positivec <- positivec %>%
             filter(!(str_detect(Population, "\\-$"))) 
-
+          
         }
         
+        print(positivec)
         
-        slong2 <- slong2 %>% left_join(positivec)
+        slong3 <- slong3 %>% left_join(positivec)
+        
+        print(slong3)
       }
-     
-   
-     # remove - populations, we dont need them :)
-
-    slong2ff <- slong2 %>%
-        filter(!(str_detect(Population, "\\-$")))
-     
-     
-    slong3 <- slong2ff %>%
-      mutate(value_norm = round(value - value_negative, 2) )
-    
-    if(input$posc2 != ""){
       
-    slong3 <- slong3 %>% 
-        mutate(perc_change = round((100*value_norm)/value_positive, 2) )
+      if(input$posc2 != ""){
+        
+        slong3 <- slong3 %>% 
+          mutate(perc_change = round((100*value_norm)/value_positive, 2) )
+        
+      }
       
-    }
-    
-  #  b <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative")) ] 
-  #  
-  # print(b)  
-  #
-  #  slong4 <- slong3 %>%
-  #    select(-c(value, value_negative)) %>%
-  #    group_by(across(all_of(b))) %>%
-  #    mutate(n = row_number()) %>%
-  #    pivot_wider(  id_cols = all_of(c(n, colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "Experiment")) ])),
-  #                  names_from = Experiment, names_sep = ".", values_from = c(value_negative))
-
-    #print(slong3)
-    if(input$posc2 != ""){
+      #  b <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative")) ] 
+      #  
+      # print(b)  
+      #
+      #  slong4 <- slong3 %>%
+      #    select(-c(value, value_negative)) %>%
+      #    group_by(across(all_of(b))) %>%
+      #    mutate(n = row_number()) %>%
+      #    pivot_wider(  id_cols = all_of(c(n, colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "Experiment")) ])),
+      #                  names_from = Experiment, names_sep = ".", values_from = c(value_negative))
       
-      b2 <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "value_positive", "value", "value_norm", "perc_change")) ]
-      b3 <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "value_positive","Experiment" ,"value", "value_norm", "perc_change")) ]
+      #print(slong3)
+      if(input$posc2 != ""){
+        
+        b2 <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "value_positive", "value", "value_norm", "perc_change")) ]
+        b3 <- colnames(slong3)[!(colnames(slong3) %in% c("value_negative", "value_positive","Experiment" ,"value", "value_norm", "perc_change")) ]
+        
+        slong4 <- slong3 %>%
+          select(-c(value, value_negative, value_positive)) %>%
+          group_by(across(all_of(b2))) %>%
+          mutate(n = row_number()) %>%
+          pivot_wider(  id_cols = c(n, all_of(b3)),
+                        names_from = Experiment, names_sep = ".", values_from = c(value_norm, perc_change)) %>%
+          select(-1)
+        
+        
+      }
       
-      slong4 <- slong3 %>%
-        select(-c(value, value_negative, value_positive)) %>%
-        group_by(across(all_of(b2))) %>%
-        mutate(n = row_number()) %>%
-        pivot_wider(  id_cols = c(n, all_of(b3)),
-                      names_from = Experiment, names_sep = ".", values_from = c(value_norm, perc_change)) %>%
-        select(-1)
+      updateCheckboxGroupInput(inputId = "arrcol3", choices = colnames(slong4)[1:(ncol(slong4)-(length(unique(slong3$Experiment))*2) )],inline = T)
       
+      statCombine2(slong4)
       
-    }
-    
-    updateCheckboxGroupInput(inputId = "arrcol3", choices = colnames(slong4)[1:(ncol(slong4)-6)],inline = T)
-    
-    statCombine2(slong4)
-    
     }
   })
   
@@ -756,7 +761,7 @@ server <- function(input, output, session) {
     }
     
   },options = list(pageLength = 100))
-    
+  
   output$dm <- downloadHandler(
     filename = function() {"metadata.xlsx"},
     content = function(file) {write_xlsx(metadata(), path = file)}
